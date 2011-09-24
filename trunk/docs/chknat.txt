@@ -1,0 +1,24 @@
+NAT类型检测
+
+前提条件:有一个公网的Server并且绑定了两个公网IP(IP-1,IP-2)。这个Server做UDP监听(IP-1,Port-1),(IP-2,Port-2)并根据客户端的要求进行应答。
+
+第一步：检测客户端是否有能力进行UDP通信以及客户端是否位于NAT后？
+
+客户端建立UDP socket然后用这个socket向服务器的(IP-1,Port-1)发送数据包要求服务器返回客户端的IP和Port, 客户端发送请求后立即开始接受数据包，要设定socket Timeout（300ms），防止无限堵塞. 重复这个过程若干次。如果每次都超时，无法接受到服务器的回应，则说明客户端无法进行UDP通信，可能是防火墙或NAT阻止UDP通信，这样的客户端也就 不能P2P了（检测停止）。 
+当客户端能够接收到服务器的回应时，需要把服务器返回的客户端（IP,Port）和这个客户端socket的 （LocalIP，LocalPort）比较。如果完全相同则客户端不在NAT后，这样的客户端具有公网IP可以直接监听UDP端口接收数据进行通信（检 测停止）。否则客户端在NAT后要做进一步的NAT类型检测(继续)。
+
+第二步：检测客户端NAT是否是Full Cone NAT？
+
+客户端建立UDP socket然后用这个socket向服务器的(IP-1,Port-1)发送数据包要求服务器用另一对(IP-2,Port-2)响应客户端的请求往回 发一个数据包,客户端发送请求后立即开始接受数据包，要设定socket Timeout（300ms），防止无限堵塞. 重复这个过程若干次。如果每次都超时，无法接受到服务器的回应，则说明客户端的NAT不是一个Full Cone NAT，具体类型有待下一步检测(继续)。如果能够接受到服务器从(IP-2,Port-2)返回的应答UDP包，则说明客户端是一个Full Cone NAT，这样的客户端能够进行UDP-P2P通信（检测停止）。
+
+第三步：检测客户端NAT是否是Symmetric NAT？
+
+客户端建立UDP socket然后用这个socket向服务器的(IP-1,Port-1)发送数据包要求服务器返回客户端的IP和Port, 客户端发送请求后立即开始接受数据包，要设定socket Timeout（300ms），防止无限堵塞. 重复这个过程直到收到回应（一定能够收到，因为第一步保证了这个客户端可以进行UDP通信）。 
+用同样的方法用一个socket向服务器的(IP-2,Port-2)发送数据包要求服务器返回客户端的IP和Port。 
+比 较上面两个过程从服务器返回的客户端(IP,Port),如果两个过程返回的(IP,Port)有一对不同则说明客户端为Symmetric NAT，这样的客户端无法进行UDP-P2P通信（检测停止）。否则是Restricted Cone NAT，是否为Port Restricted Cone NAT有待检测(继续)。
+
+第四步：检测客户端NAT是否是Restricted Cone NAT还是Port Restricted Cone NAT？
+
+客户端建立UDP socket然后用这个socket向服务器的(IP-1,Port-1)发送数据包要求服务器用IP-1和一个不同于Port-1的端口发送一个UDP 数据包响应客户端, 客户端发送请求后立即开始接受数据包，要设定socket Timeout（300ms），防止无限堵塞. 重复这个过程若干次。如果每次都超时，无法接受到服务器的回应，则说明客户端是一个Port Restricted Cone NAT，如果能够收到服务器的响应则说明客户端是一个Restricted Cone NAT。以上两种NAT都可以进行UDP-P2P通信。
+
+注：以上检测过程中只说明了可否进行UDP-P2P的打洞通信，具体怎么通信一般要借助于Rendezvous Server。另外对于Symmetric NAT不是说完全不能进行UDP-P2P达洞通信，可以进行端口预测打洞，不过不能保证成功。
